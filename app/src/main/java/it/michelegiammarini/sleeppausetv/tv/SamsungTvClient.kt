@@ -1,9 +1,12 @@
 package it.michelegiammarini.sleeppausetv.tv
 
+import it.michelegiammarini.sleeppausetv.data.AppSettings
 import it.michelegiammarini.sleeppausetv.data.SettingsStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
@@ -18,15 +21,14 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-sealed interface TvResult {
-    data class Success(val tokenSaved: Boolean = false) : TvResult
-    data class Error(val message: String) : TvResult
-}
+private data class SamsungPairingResult(val token: String?)
 
-class SamsungTvClient(private val settings: SettingsStore) {
+class SamsungTvClient(private val settings: SettingsStore) : TvController {
     @Volatile private var socket: WebSocket? = null
+    private val connectionMutex = Mutex()
 
-    // Samsung TVs commonly expose a self-signed certificate on the local-only 8002 endpoint.
+    // Samsung TVs use a self-signed certificate on LAN port 8002. This client is
+    // restricted to the host explicitly entered by the user.
     private val client: OkHttpClient by lazy {
         val trustManager = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
@@ -44,49 +46,62 @@ class SamsungTvClient(private val settings: SettingsStore) {
             .build()
     }
 
-    suspend fun connect(): TvResult = withContext(Dispatchers.IO) {
+    override suspend fun connect(): TvResult = connectionMutex.withLock {
+        withContext(Dispatchers.IO) { connectLocked(settings.snapshot()) }
+    }
+
+    override suspend fun sendPause(): TvResult = connectionMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val connected = connectLocked(settings.snapshot())
+            if (connected is TvResult.Error) return@withContext connected
+            delay(200)
+            if (socket?.send(SamsungProtocol.keyPayload("KEY_PAUSE")) == true) {
+                TvResult.Success(message = "Samsung pause command sent")
+            } else TvResult.Error("The Samsung remote channel is unavailable")
+        }
+    }
+
+    private suspend fun connectLocked(config: AppSettings): TvResult {
         disconnect()
-        val config = settings.snapshot()
-        if (!isValidIpOrHost(config.tvIp)) return@withContext TvResult.Error("Inserisci un indirizzo TV valido")
-        val ready = CompletableDeferred<TvResult>()
+        if (!isValidHost(config.tvIp)) return TvResult.Error("Enter a valid TV IP address or hostname")
+        val ready = CompletableDeferred<SamsungPairingResult>()
         val request = Request.Builder().url(SamsungProtocol.remoteUrl(config.tvIp, config.tvToken)).build()
+
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val token = SamsungProtocol.extractToken(text)
-                if (token != null) {
-                    val changed = token != config.tvToken
-                    kotlinx.coroutines.runBlocking { settings.saveTvToken(token) }
-                    if (!ready.isCompleted) ready.complete(TvResult.Success(changed))
-                } else if (text.contains("ms.channel.connect") && !ready.isCompleted) {
-                    ready.complete(TvResult.Success(false))
-                } else if (text.contains("ms.channel.unauthorized") && !ready.isCompleted) {
-                    ready.complete(TvResult.Error("Autorizzazione rifiutata dalla TV"))
+                when {
+                    token != null && !ready.isCompleted -> ready.complete(SamsungPairingResult(token))
+                    text.contains("ms.channel.connect") && !ready.isCompleted -> ready.complete(SamsungPairingResult(null))
+                    text.contains("ms.channel.unauthorized") && !ready.isCompleted ->
+                        ready.completeExceptionally(IllegalStateException("Authorization was rejected on the TV"))
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (!ready.isCompleted) ready.complete(TvResult.Error(t.message ?: "Connessione TV non riuscita"))
+                if (!ready.isCompleted) ready.completeExceptionally(t)
             }
         })
-        runCatching { withTimeout(12_000) { ready.await() } }
-            .getOrElse { TvResult.Error("Timeout: conferma l'autorizzazione sul televisore") }
+
+        return runCatching {
+            val pairing = withTimeout(12_000) { ready.await() }
+            val changed = pairing.token?.let { token ->
+                settings.saveTvToken(token)
+                token != config.tvToken
+            } ?: false
+            TvResult.Success(changed, if (changed) "Samsung TV paired; token saved" else "Samsung TV connected")
+        }.getOrElse { error ->
+            disconnect()
+            TvResult.Error(
+                if (error is kotlinx.coroutines.TimeoutCancellationException)
+                    "Timed out. Accept the connection request on the Samsung TV"
+                else error.message ?: "Could not connect to the Samsung TV"
+            )
+        }
     }
 
-    suspend fun sendPause(): TvResult {
-        val connected = connect()
-        if (connected is TvResult.Error) return connected
-        delay(150)
-        val sent = socket?.send(SamsungProtocol.keyPayload("KEY_PAUSE")) == true
-        return if (sent) connected else TvResult.Error("Canale TV non disponibile")
-    }
-
-    fun disconnect() {
+    override fun disconnect() {
         socket?.close(1000, "done")
         socket = null
-    }
-
-    internal fun isValidIpOrHost(value: String): Boolean {
-        val v = value.trim()
-        return v.isNotEmpty() && v.length <= 253 && v.none { it.isWhitespace() || it == '/' || it == ':' }
     }
 }

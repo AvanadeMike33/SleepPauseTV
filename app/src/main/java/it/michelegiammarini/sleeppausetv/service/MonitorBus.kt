@@ -7,11 +7,17 @@ data class MonitorState(
     val running: Boolean = false,
     val sessionStartedAt: Long? = null,
     val currentDb: Float = -90f,
-    val lastConfidence: Float = 0f,
+    val snoringScore: Float = 0f,
+    val breathingScore: Float = 0f,
+    val speechScore: Float = 0f,
+    val musicScore: Float = 0f,
+    val interferenceScore: Float = 0f,
+    val topLabel: String = "No sound",
+    val topScore: Float = 0f,
     val snoreCount: Int = 0,
     val movementCount: Int = 0,
     val pauseCount: Int = 0,
-    val lastMessage: String = "Pronto"
+    val lastMessage: String = "Ready",
 )
 
 object MonitorBus {

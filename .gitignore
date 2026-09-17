@@ -8,5 +8,5 @@
 .externalNativeBuild
 .cxx
 app/build
-/.vs/SleepPauseTV.slnx/FileContentIndex
-/.vs/SleepPauseTV_MVP.slnx/FileContentIndex
+app/src/main/assets/yamnet.tflite
+app/src/main/assets/*.part

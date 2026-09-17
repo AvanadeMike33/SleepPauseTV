@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import it.michelegiammarini.sleeppausetv.data.SettingsStore
 import it.michelegiammarini.sleeppausetv.data.db.SleepDatabase
-import it.michelegiammarini.sleeppausetv.tv.SamsungTvClient
+import it.michelegiammarini.sleeppausetv.tv.MultiBrandTvClient
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -12,7 +12,7 @@ class AppContainer(context: Context) {
     val database: SleepDatabase = Room.databaseBuilder(
         appContext,
         SleepDatabase::class.java,
-        "sleep-pause.db"
+        "sleep-pause.db",
     ).fallbackToDestructiveMigration().build()
-    val tvClient = SamsungTvClient(settings)
+    val tvClient = MultiBrandTvClient(settings)
 }

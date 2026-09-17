@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
@@ -19,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,8 +36,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import it.michelegiammarini.sleeppausetv.data.AppSettings
+import it.michelegiammarini.sleeppausetv.data.TvBrand
 import it.michelegiammarini.sleeppausetv.data.db.SleepSessionEntity
 import java.text.DateFormat
 import java.util.Date
@@ -54,80 +60,66 @@ fun SleepPauseScreen(viewModel: MainViewModel, ensurePermissions: (() -> Unit) -
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             MonitorCard(
                 running = monitor.running,
                 db = monitor.currentDb,
-                confidence = monitor.lastConfidence,
+                snoringScore = monitor.snoringScore,
+                breathingScore = monitor.breathingScore,
+                speechScore = monitor.speechScore,
+                musicScore = monitor.musicScore,
+                interferenceScore = monitor.interferenceScore,
+                topLabel = monitor.topLabel,
+                topScore = monitor.topScore,
                 snores = monitor.snoreCount,
                 movements = monitor.movementCount,
                 pauses = monitor.pauseCount,
                 status = monitor.lastMessage,
                 onStart = { ensurePermissions(viewModel::startMonitoring) },
-                onStop = viewModel::stopMonitoring
+                onStop = viewModel::stopMonitoring,
             )
 
             message?.let {
-                Card(colors = CardDefaults.cardColors(
-                    containerColor = if (it.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
-                )) { Text(it.text, Modifier.padding(12.dp)) }
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (it.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                ) { Text(it.text, Modifier.padding(12.dp)) }
             }
 
-            SectionCard("Samsung TV") {
-                OutlinedTextField(
-                    value = settings.tvIp,
-                    onValueChange = viewModel::setTvIp,
-                    label = { Text("Indirizzo IP / hostname") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    if (settings.tvToken.isBlank()) "Token: non ancora acquisito" else "Token: salvato in modo persistente ••••${settings.tvToken.takeLast(4)}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = viewModel::connectTv) { Text("Connetti / abbina") }
-                    OutlinedButton(onClick = viewModel::pauseTv) {
-                        Icon(Icons.Default.Pause, contentDescription = null)
-                        Text(" KEY_PAUSE")
-                    }
-                }
-                OutlinedButton(onClick = viewModel::clearToken, enabled = settings.tvToken.isNotBlank()) {
-                    Text("Dimentica token")
-                }
-            }
+            TvConnectionCard(settings, viewModel)
 
-            SectionCard("Rilevamento e automazione") {
-                LabelSwitch("Pausa automatica al russamento", settings.automaticPause, viewModel::setAutoPause)
-                LabelSwitch("Monitora i movimenti", settings.monitorMovement, viewModel::setMonitorMovement)
-                Text("Soglia volume: ${settings.sensitivityDb.roundToInt()} dBFS")
+            SectionCard("Detection and automation") {
+                LabelSwitch("Pause TV after a confirmed snore", settings.automaticPause, viewModel::setAutoPause)
+                LabelSwitch("Track device movement", settings.monitorMovement, viewModel::setMonitorMovement)
+                Text("Minimum sound level: ${settings.sensitivityDb.roundToInt()} dBFS")
                 Slider(
                     value = settings.sensitivityDb,
                     onValueChange = viewModel::setSensitivity,
-                    valueRange = -60f..-25f
+                    valueRange = -60f..-25f,
                 )
-                Text("Confidenza minima: ${(settings.minConfidence * 100).roundToInt()}%")
+                Text("Minimum YAMNet snoring score: ${(settings.minConfidence * 100).roundToInt()}%")
                 Slider(
                     value = settings.minConfidence,
                     onValueChange = viewModel::setConfidence,
-                    valueRange = 0.45f..0.90f
+                    valueRange = 0.25f..0.85f,
                 )
-                Text("Intervallo minimo tra pause: ${settings.pauseCooldownMinutes} min")
+                Text("Minimum time between automatic pauses: ${settings.pauseCooldownMinutes} min")
                 Slider(
                     value = settings.pauseCooldownMinutes.toFloat(),
                     onValueChange = { viewModel.setCooldown(it.roundToInt()) },
                     valueRange = 1f..30f,
-                    steps = 28
+                    steps = 28,
                 )
                 Text(
-                    "L'audio è elaborato sul dispositivo e non viene registrato. Il rilevamento è orientativo e non costituisce un dispositivo medico.",
-                    style = MaterialTheme.typography.bodySmall
+                    "False-positive protection starts with a short room calibration, then uses an adaptive noise floor, a 6 dB signal-to-noise gate, multi-window confirmation, a refractory period, respiratory context, and rejection of speech, music, TV and household-noise classes. Audio is processed locally and is never stored or transmitted. This is not a medical device.",
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
 
-            SectionCard("Ultime sessioni") {
-                if (history.isEmpty()) Text("Nessuna sessione salvata")
+            SectionCard("Recent sessions") {
+                if (history.isEmpty()) Text("No saved sessions")
                 history.forEachIndexed { index, item ->
                     if (index > 0) HorizontalDivider()
                     SessionRow(item)
@@ -139,30 +131,131 @@ fun SleepPauseScreen(viewModel: MainViewModel, ensurePermissions: (() -> Unit) -
 }
 
 @Composable
+private fun TvConnectionCard(settings: AppSettings, viewModel: MainViewModel) {
+    SectionCard("TV connection") {
+        Text("TV platform", style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BrandChip(TvBrand.SAMSUNG, settings, viewModel)
+            BrandChip(TvBrand.LG_WEBOS, settings, viewModel)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BrandChip(TvBrand.ROKU, settings, viewModel)
+            BrandChip(TvBrand.HOME_ASSISTANT, settings, viewModel)
+        }
+
+        if (settings.tvBrand == TvBrand.HOME_ASSISTANT) {
+            OutlinedTextField(
+                value = settings.homeAssistantUrl,
+                onValueChange = viewModel::setHomeAssistantUrl,
+                label = { Text("Home Assistant URL") },
+                placeholder = { Text("https://home.example.com") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = settings.homeAssistantToken,
+                onValueChange = viewModel::setHomeAssistantToken,
+                label = { Text("Long-lived access token") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = settings.homeAssistantEntity,
+                onValueChange = viewModel::setHomeAssistantEntity,
+                label = { Text("Media player entity") },
+                placeholder = { Text("media_player.living_room_tv") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Use this option for Android/Google TV, Fire TV, Sony, Philips, TCL, Hisense, Panasonic and other TVs already integrated with Home Assistant.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            OutlinedTextField(
+                value = settings.tvIp,
+                onValueChange = viewModel::setTvIp,
+                label = { Text("TV IP address or hostname") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (settings.tvBrand == TvBrand.SAMSUNG || settings.tvBrand == TvBrand.LG_WEBOS) {
+                Text(
+                    if (settings.tvToken.isBlank()) "Pairing key: not acquired" else "Pairing key: saved locally ••••${settings.tvToken.takeLast(4)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                when (settings.tvBrand) {
+                    TvBrand.SAMSUNG -> "The first connection prompts for approval on the Samsung TV."
+                    TvBrand.LG_WEBOS -> "The first connection prompts for approval on the LG webOS TV."
+                    TvBrand.ROKU -> "Enable Settings > System > Advanced system settings > Control by mobile apps if required. Roku uses a Play/Pause toggle."
+                    TvBrand.HOME_ASSISTANT -> ""
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = viewModel::connectTv) { Text("Connect / pair") }
+            OutlinedButton(onClick = viewModel::pauseTv) {
+                Icon(Icons.Default.Pause, contentDescription = null)
+                Text(" Test pause")
+            }
+        }
+        if (settings.tvBrand == TvBrand.SAMSUNG || settings.tvBrand == TvBrand.LG_WEBOS) {
+            OutlinedButton(onClick = viewModel::clearToken, enabled = settings.tvToken.isNotBlank()) {
+                Text("Forget pairing key")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandChip(brand: TvBrand, settings: AppSettings, viewModel: MainViewModel) {
+    FilterChip(
+        selected = settings.tvBrand == brand,
+        onClick = { viewModel.setTvBrand(brand) },
+        label = { Text(brand.displayName) },
+    )
+}
+
+@Composable
 private fun MonitorCard(
     running: Boolean,
     db: Float,
-    confidence: Float,
+    snoringScore: Float,
+    breathingScore: Float,
+    speechScore: Float,
+    musicScore: Float,
+    interferenceScore: Float,
+    topLabel: String,
+    topScore: Float,
     snores: Int,
     movements: Int,
     pauses: Int,
     status: String,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Bedtime, contentDescription = null)
-                Text(if (running) " Monitoraggio in corso" else " Monitoraggio fermo", style = MaterialTheme.typography.titleMedium)
+                Text(if (running) " Monitoring" else " Monitoring stopped", style = MaterialTheme.typography.titleMedium)
             }
             Text(status)
             if (running) {
-                Text("${db.roundToInt()} dBFS • confidenza ${(confidence * 100).roundToInt()}%")
-                Text("Russamenti $snores  •  Movimenti $movements  •  Pause TV $pauses")
-                Button(onClick = onStop) { Icon(Icons.Default.Stop, null); Text(" Termina e salva") }
+                Text("${db.roundToInt()} dBFS • $topLabel ${(topScore * 100).roundToInt()}%")
+                Text("Snoring ${(snoringScore * 100).roundToInt()}% • Breathing ${(breathingScore * 100).roundToInt()}%")
+                Text("Rejectors: speech ${(speechScore * 100).roundToInt()}% • music ${(musicScore * 100).roundToInt()}% • other ${(interferenceScore * 100).roundToInt()}%")
+                Text("Snores $snores  •  Movements $movements  •  TV pauses $pauses")
+                Button(onClick = onStop) { Icon(Icons.Default.Stop, null); Text(" Stop and save") }
             } else {
-                Button(onClick = onStart) { Text("Avvia sessione") }
+                Button(onClick = onStart) { Text("Start session") }
             }
         }
     }
@@ -180,7 +273,11 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun LabelSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
         Text(label, Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChecked)
     }
@@ -192,7 +289,7 @@ private fun SessionRow(item: SleepSessionEntity) {
     val duration = item.endedAt?.let { TimeUnit.MILLISECONDS.toMinutes(it - item.startedAt) }
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(start, style = MaterialTheme.typography.titleSmall)
-        Text("${duration?.let { "$it min" } ?: "in corso"} • ${item.snoreCount} russamenti • ${item.movementCount} movimenti • ${item.automaticPauses} pause")
-        if (item.endedAt != null) Text("Rumore medio ${item.averageNoiseDb.roundToInt()} dBFS", style = MaterialTheme.typography.bodySmall)
+        Text("${duration?.let { "$it min" } ?: "in progress"} • ${item.snoreCount} snores • ${item.movementCount} movements • ${item.automaticPauses} pauses")
+        if (item.endedAt != null) Text("Average noise ${item.averageNoiseDb.roundToInt()} dBFS", style = MaterialTheme.typography.bodySmall)
     }
 }

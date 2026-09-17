@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import it.michelegiammarini.sleeppausetv.SleepPauseApp
 import it.michelegiammarini.sleeppausetv.data.AppSettings
+import it.michelegiammarini.sleeppausetv.data.TvBrand
 import it.michelegiammarini.sleeppausetv.data.db.SleepSessionEntity
 import it.michelegiammarini.sleeppausetv.service.MonitorBus
 import it.michelegiammarini.sleeppausetv.service.MonitorState
@@ -31,10 +32,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableMessage = kotlinx.coroutines.flow.MutableStateFlow<UiMessage?>(null)
     val message = mutableMessage
 
+    fun setTvBrand(value: TvBrand) = viewModelScope.launch { container.settings.setTvBrand(value) }
     fun setTvIp(value: String) = viewModelScope.launch { container.settings.setTvIp(value) }
+    fun setHomeAssistantUrl(value: String) = viewModelScope.launch { container.settings.setHomeAssistantUrl(value) }
+    fun setHomeAssistantToken(value: String) = viewModelScope.launch { container.settings.setHomeAssistantToken(value) }
+    fun setHomeAssistantEntity(value: String) = viewModelScope.launch { container.settings.setHomeAssistantEntity(value) }
     fun clearToken() = viewModelScope.launch {
         container.settings.clearTvToken()
-        mutableMessage.value = UiMessage("Token eliminato")
+        mutableMessage.value = UiMessage("Saved pairing key removed")
     }
     fun setSensitivity(value: Float) = viewModelScope.launch { container.settings.setSensitivity(value) }
     fun setConfidence(value: Float) = viewModelScope.launch { container.settings.setMinConfidence(value) }
@@ -43,16 +48,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setMonitorMovement(value: Boolean) = viewModelScope.launch { container.settings.setMonitorMovement(value) }
 
     fun connectTv() = viewModelScope.launch {
-        mutableMessage.value = UiMessage("Connessione in corso…")
+        mutableMessage.value = UiMessage("Connecting…")
         mutableMessage.value = when (val result = container.tvClient.connect()) {
-            is TvResult.Success -> UiMessage(if (result.tokenSaved) "TV connessa: token salvato automaticamente" else "TV connessa")
+            is TvResult.Success -> UiMessage(result.message)
             is TvResult.Error -> UiMessage(result.message, true)
         }
     }
 
     fun pauseTv() = viewModelScope.launch {
         mutableMessage.value = when (val result = container.tvClient.sendPause()) {
-            is TvResult.Success -> UiMessage("Comando KEY_PAUSE inviato")
+            is TvResult.Success -> UiMessage(result.message)
             is TvResult.Error -> UiMessage(result.message, true)
         }
     }
@@ -64,7 +69,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopMonitoring() {
         getApplication<Application>().startService(
-            Intent(getApplication(), SleepMonitorService::class.java).setAction(SleepMonitorService.ACTION_STOP)
+            Intent(getApplication(), SleepMonitorService::class.java).setAction(SleepMonitorService.ACTION_STOP),
         )
     }
 
