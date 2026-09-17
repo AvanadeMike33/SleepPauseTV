@@ -10,3 +10,4 @@
 app/build
 app/src/main/assets/yamnet.tflite
 app/src/main/assets/*.part
+/.vs/SleepPauseTV_MVP.slnx/FileContentIndex
