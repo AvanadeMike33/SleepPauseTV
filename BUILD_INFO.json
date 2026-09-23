@@ -1,229 +1,31 @@
 {
-  "project": "SleepPause TV Universal",
-  "version": "3.0.0-universal",
-  "generatedAt": "2026-09-17T17:02:20+02:00",
+  "project": "SleepPause TV",
+  "version": "4.0.2-fix",
+  "generatedAt": "2026-09-20T14:35:00+02:00",
   "sourceStaticVerification": "passed",
   "kotlinXmlStructuralVerification": "passed",
   "androidBuildExecuted": false,
-  "androidBuildNote": "The container had no Android SDK/Gradle and direct toolchain downloads were blocked. Android Studio and GitHub Actions build instructions are included.",
+  "androidBuildNote": "Gradle and the Android SDK are not installed in this container. Build with Android Studio, Gradle 8.9, or the included GitHub Actions workflow.",
   "yamnetModelBundled": false,
   "yamnetModelProvisioning": "Gradle preBuild task downloadYamnetModel; optional scripts/download_yamnet.py.",
-  "automatedTestSources": 15,
-  "files": [
-    {
-      "path": ".github/workflows/build-apk.yml",
-      "bytes": 664,
-      "sha256": "64a947454a484e767d1d2bebb95ff7cdb73a62dc04c0c8911ff00f5ceda15ae1"
-    },
-    {
-      "path": ".gitignore",
-      "bytes": 163,
-      "sha256": "433aa79cd1f283d70bbba873d5c380ae4e27c4c8286a8cc44e7c8bca24492ca6"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "bytes": 704,
-      "sha256": "95da569ae87652ea314b10367424a12b27a8a5c97bec4e7e5f3fa75e31bea787"
-    },
-    {
-      "path": "MODEL_LICENSE.md",
-      "bytes": 635,
-      "sha256": "0b42c51fc7d97ef1e2c5d38caeccd2be13c741998318bd36219f1b72e55a93b7"
-    },
-    {
-      "path": "README.md",
-      "bytes": 6908,
-      "sha256": "fd954bf5b0f83037bb0a734822ff3ebce824b3a7ccf536993826964a0ba70012"
-    },
-    {
-      "path": "VERIFICATION_REPORT.md",
-      "bytes": 1754,
-      "sha256": "bfcad67f905bc25e6d56a9f72ac1fddff841ab9502ae52f1610977318944cc3b"
-    },
-    {
-      "path": "app/build.gradle.kts",
-      "bytes": 3671,
-      "sha256": "b5f252348ad782ffa1b95a5850e77b5fe6b9587b9946ea7e8a33c9707ad7870e"
-    },
-    {
-      "path": "app/src/main/AndroidManifest.xml",
-      "bytes": 1484,
-      "sha256": "69764337294d56314a453590b5afdd050c16b90b354596e4bde9989d6398ba4b"
-    },
-    {
-      "path": "app/src/main/assets/README.md",
-      "bytes": 545,
-      "sha256": "362a12e7b573cbfb066b4db54c1d7296b0971b7f268021588b0064ae9d03e925"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/MainActivity.kt",
-      "bytes": 2292,
-      "sha256": "5a5f4b3087f0e5b19d262729d0e8a81603ebcf2a70f81aff70e3aa3cd37bd557"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/SleepPauseApp.kt",
-      "bytes": 221,
-      "sha256": "b3fac6e286b109229bb8ae9bcb80e7758531950c5a38ddcfa19631abb8de1cd8"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/audio/YamnetAudioClassifier.kt",
-      "bytes": 10122,
-      "sha256": "da3fd19c028f0dc8158371a3e8d0f89e4b175fc93f7b4d9925b233d226bc1ef1"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/data/SettingsStore.kt",
-      "bytes": 4413,
-      "sha256": "f32a78d59ab2c0325101c0edf446e4e1b9f343d6bbc1690f341be06d46a22da1"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/data/db/Entities.kt",
-      "bytes": 1063,
-      "sha256": "6c398e025fbc583eefb50ba121a318d77e349a3f6fc3db5255230fc8be061e6c"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/data/db/SleepDao.kt",
-      "bytes": 751,
-      "sha256": "fe9f547a73b815ef8956546d662c36da26a3fbe3ee98fb735244f0431fe49f52"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/data/db/SleepDatabase.kt",
-      "bytes": 328,
-      "sha256": "be3a75d9011a97d3c7d3fa20214547aae98c32475b1a32aa4a597434630b52a3"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/di/AppContainer.kt",
-      "bytes": 664,
-      "sha256": "c1fd24cf98d5c83792544638171faed539bbd48388ca8846005148a2fe0a3637"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/service/MonitorBus.kt",
-      "bytes": 915,
-      "sha256": "9596f88dfd11eca0c8d6da549000a09eab7702b63aee586c6d0ad95f01550409"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/service/SleepMonitorService.kt",
-      "bytes": 10799,
-      "sha256": "4c4c2db559c5ff49d159a065787b0e51a23c6dda0895c17eeb738a6cb147f051"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/HomeAssistantTvClient.kt",
-      "bytes": 2758,
-      "sha256": "9c1a219533dbb2420e427712968a9ee62914e2e7d52de68c3b2ead1d249bc4c2"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/LgWebOsProtocol.kt",
-      "bytes": 1711,
-      "sha256": "201dd4d558609ccdab9c0c3ce83295dd4a7b5cc64cb559463d7cfac516f72ec0"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/LgWebOsTvClient.kt",
-      "bytes": 3720,
-      "sha256": "93c489b9c897dfa97e88e4b812df6692cceee31745306b1d4cca9b23700756e8"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/RokuTvClient.kt",
-      "bytes": 3243,
-      "sha256": "03b58ba9378b7d7f598069bfe8ab40247c15fcc63c34cd74a77ef38f3fd73bcb"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/SamsungProtocol.kt",
-      "bytes": 1235,
-      "sha256": "6a6c6e48872b1c546647cc8883938241a4e8ad7195e0c59a5343bedc16c547ce"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/SamsungTvClient.kt",
-      "bytes": 4734,
-      "sha256": "b3b7f452759f0080359b5864260b9f36f71d8c38801cc2f240a2ca5933f502df"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/tv/TvController.kt",
-      "bytes": 1487,
-      "sha256": "3f29d781357267e8974af7d2b025d2f63cf9d2ea8f99b31a6cf4097dc80c3d73"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/ui/MainViewModel.kt",
-      "bytes": 4274,
-      "sha256": "cf2b89eeb73da61b36e4ead8d6e6659ad8fefd1ee4f693a6d21f7e6d28b987e5"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/ui/SleepPauseScreen.kt",
-      "bytes": 13593,
-      "sha256": "9a2f41a35b2c586a29ccdd87e53ee826ae17d9a6be47b330f1b239502324c8b1"
-    },
-    {
-      "path": "app/src/main/java/it/michelegiammarini/sleeppausetv/ui/theme/Theme.kt",
-      "bytes": 787,
-      "sha256": "511876252df4b2aa6219b56db139edc417aff2cdbe492ea690dd190464544ab7"
-    },
-    {
-      "path": "app/src/main/res/values/strings.xml",
-      "bytes": 76,
-      "sha256": "9f37bb54ffd795c6f3f896d46b821a9ee0b3e100a1eea3ecaca86ff3adecc244"
-    },
-    {
-      "path": "app/src/main/res/values/themes.xml",
-      "bytes": 303,
-      "sha256": "5650d13573b35fe90058e37b0e5b75cd650a7b08ff80a4c1e79240361212e84e"
-    },
-    {
-      "path": "app/src/main/res/xml/network_security_config.xml",
-      "bytes": 241,
-      "sha256": "ff59b1c43cc02caf8f9ed9d314f18a0131a97a07fd98a9f8513bec67f8d2e545"
-    },
-    {
-      "path": "app/src/test/java/it/michelegiammarini/sleeppausetv/audio/SnoreDecisionEngineTest.kt",
-      "bytes": 3680,
-      "sha256": "342063ff9d4597fe68ba6ad0286fd0cdf939ff0ea0567ae35d604cef80e99c31"
-    },
-    {
-      "path": "app/src/test/java/it/michelegiammarini/sleeppausetv/tv/LgWebOsProtocolTest.kt",
-      "bytes": 1009,
-      "sha256": "0c8d8bdb21db2302d8de34c3ec6f7d5d60ff43f65da62cf146517b4c45c17a47"
-    },
-    {
-      "path": "app/src/test/java/it/michelegiammarini/sleeppausetv/tv/RokuProtocolTest.kt",
-      "bytes": 738,
-      "sha256": "a7bc957f13aa880ec25f493f2125f28d69d22da1348fc24386f387788b2ed281"
-    },
-    {
-      "path": "app/src/test/java/it/michelegiammarini/sleeppausetv/tv/SamsungProtocolTest.kt",
-      "bytes": 1013,
-      "sha256": "f9b5a7b545929ce4b8cb50b23cee7660cc722fe6883946469f1faed7d2a37b7e"
-    },
-    {
-      "path": "build.gradle.kts",
-      "bytes": 287,
-      "sha256": "795b5a8e9889cfcfa1e63dba93d57645ef60cab5a8d19de1524aac5331764412"
-    },
-    {
-      "path": "build_apk.sh",
-      "bytes": 386,
-      "sha256": "6e35fe19789604865a28058c6751d78d4db3492e9ce31110850cb25917ee3042"
-    },
-    {
-      "path": "gradle.properties",
-      "bytes": 136,
-      "sha256": "678c35a27eeda302d6a960484179d118d08fb1edf05c1b40745bc7aed6e88f03"
-    },
-    {
-      "path": "scripts/download_yamnet.py",
-      "bytes": 1060,
-      "sha256": "5b5a08e3bd75fdf99d8608e5d9819e28d2c578a3edc61cd8e5a0b4946eb995b3"
-    },
-    {
-      "path": "scripts/validate_source.py",
-      "bytes": 3035,
-      "sha256": "d1ae223951fcccb543478a895fb101be478b612d10465d8b1989dc6aa883fa9b"
-    },
-    {
-      "path": "scripts/verify_project.py",
-      "bytes": 2534,
-      "sha256": "5e15c4c858811c4cabbd6c7c208e94b8588e360b8a33d39d1f5aaaf8ecb6579f"
-    },
-    {
-      "path": "settings.gradle.kts",
-      "bytes": 330,
-      "sha256": "1a4e8ff4ea95c46ade14db860acc94ef2b0d628d4206969b233b56e4588c10b3"
-    }
+  "junitTestMethodsIncluded": 25,
+  "features": [
+    "configured sleep-score counting without hidden adaptive dB override",
+    "immediate atomic sleep-event counting",
+    "TV-independent event recording",
+    "independent breathing threshold and sequence",
+    "autonomous breathing event confirmation without confirmed snoring",
+    "competing-sound false-positive filtering for breathing-only events",
+    "independent snoring threshold and sequence",
+    "combined sleep events",
+    "configurable competing-sound sensitivity",
+    "optional movement tracking",
+    "configurable no-movement pause gate",
+    "persistent TV pairing with stale-key recovery",
+    "Samsung ports 8002/8001 fallback and reconnect",
+    "LG webOS ports 3000/3001 fallback and reconnect",
+    "Home Assistant Bearer authentication",
+    "Roku playback-state-safe pause",
+    "local YAMNet TensorFlow Lite inference"
   ]
 }

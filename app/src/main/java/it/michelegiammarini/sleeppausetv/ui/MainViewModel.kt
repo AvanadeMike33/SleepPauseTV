@@ -42,10 +42,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mutableMessage.value = UiMessage("Saved pairing key removed")
     }
     fun setSensitivity(value: Float) = viewModelScope.launch { container.settings.setSensitivity(value) }
-    fun setConfidence(value: Float) = viewModelScope.launch { container.settings.setMinConfidence(value) }
+    fun setSnoringConfidence(value: Float) = viewModelScope.launch { container.settings.setSnoringConfidence(value) }
+    fun setSnoringConsecutive(value: Int) = viewModelScope.launch { container.settings.setSnoringConsecutiveDetections(value) }
+    fun setBreathingConfidence(value: Float) = viewModelScope.launch { container.settings.setBreathingConfidence(value) }
+    fun setBreathingConsecutive(value: Int) = viewModelScope.launch { container.settings.setBreathingConsecutiveDetections(value) }
+    fun setOtherSoundSensitivity(value: Float) = viewModelScope.launch { container.settings.setOtherSoundSensitivity(value) }
     fun setCooldown(value: Int) = viewModelScope.launch { container.settings.setPauseCooldown(value) }
     fun setAutoPause(value: Boolean) = viewModelScope.launch { container.settings.setAutomaticPause(value) }
     fun setMonitorMovement(value: Boolean) = viewModelScope.launch { container.settings.setMonitorMovement(value) }
+    fun setNoMovementMinutes(value: Int) = viewModelScope.launch { container.settings.setNoMovementMinutes(value) }
 
     fun connectTv() = viewModelScope.launch {
         mutableMessage.value = UiMessage("Connecting…")

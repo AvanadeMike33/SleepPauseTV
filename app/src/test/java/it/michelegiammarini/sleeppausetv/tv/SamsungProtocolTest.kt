@@ -18,6 +18,7 @@ class SamsungProtocolTest {
         assertTrue(url.startsWith("wss://192.168.1.40:8002/"))
         assertTrue(url.contains("token=123456"))
         assertFalse(url.contains("SleepPause TV"))
+        assertTrue(SamsungProtocol.remoteUrl("192.168.1.40", "", secure = false).startsWith("ws://192.168.1.40:8001/"))
     }
 
     @Test fun tokenIsExtractedFromConnectEvent() {

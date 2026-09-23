@@ -1,136 +1,132 @@
-# SleepPause TV Universal 3.0
+# SleepPause TV 4.0.2
 
-SleepPause TV is an Android companion app that listens locally for sustained snoring and sends a pause command to a television. Version 3.0 reduces false snore counts, resets every new session correctly, uses English throughout, and adds multiple TV-control adapters.
+SleepPause TV is an Android companion app that pauses a TV when on-device YAMNet analysis detects sustained sleep-related breathing, sustained snoring, or both together. If movement tracking is enabled, an automatic pause is sent only after the configured no-movement period has elapsed.
 
-## What changed
+The app and all user-facing text are in English.
 
-### False-positive protection
+## Core behavior
 
-The original build accepted two YAMNet windows when `Snoring` passed a low fixed score and `Speech`/`Music` stayed below a fixed cutoff. Version 3.0 adds:
+1. The microphone is analyzed locally in approximately 0.975-second YAMNet windows.
+2. Breathing and snoring are evaluated independently, each with its own minimum YAMNet score and required number of consecutive detections.
+3. Either confirmed signal can create one sleep event. A breathing sequence therefore works without snoring. The event is reported as **Breathing and snoring** only when both independent consecutive-detection requirements have been completed; an isolated snoring score cannot relabel or block a breathing event.
+4. Speech, music, TV/radio sound and common household noises are treated as competing sounds. The **Sensitivity versus other sounds** control adjusts how much separation is required.
+5. A short startup calibration prevents transient detections, but it no longer raises the configured dBFS threshold in the background.
+6. A latch, release rule and refractory period prevent one sustained sound from creating repeated events.
+7. If movement tracking is enabled, the event can pause the TV only when no device movement has been detected for the configured number of minutes.
+8. The existing automatic-pause cooldown prevents repeated pause commands.
+9. A confirmed sleep event is counted immediately; TV connection delays or failures cannot block the counter.
 
-- a higher balanced default YAMNet threshold (**45%**, still adjustable);
-- a six-window startup calibration, adaptive room-noise estimate and **6 dB signal-to-noise gate**;
-- snoring-score dominance over competing audio, not only a fixed blocker;
-- respiratory context, with a stricter exception only for very strong snoring;
-- rejection of TV/radio, voice, music, vehicles, motors, fans, appliances, alarms, pets, coughs, sneezes and abrupt household sounds;
-- multi-window confirmation and a two-window release rule;
-- a four-window refractory period so one fragmented sound is not counted twice;
-- full reset of counts and acoustic aggregates at the start of every session.
+Example: set **Minimum YAMNet breathing score** to **50%** and **Consecutive breathing detections** to **4**. Four qualifying breathing windows in a row create one sleep event. A pause is then attempted only if automatic pause is enabled, the movement condition is satisfied, and the cooldown permits it.
 
-These rules intentionally favor fewer false alarms over detecting every faint snore. Keep the phone close to the sleeper, away from TV speakers, and begin with the default settings.
+## Preserved TV and ML components
 
-### TV support
+The verified implementation was retained rather than duplicated:
 
-| Platform | Connection | Pause action | Notes |
+| Platform | Connection | Pause action | Persistent credential |
 |---|---|---|---|
-| Samsung Smart TV | Secure LAN WebSocket, port 8002 | `KEY_PAUSE` | Approve first pairing on the TV; token is stored locally. |
-| LG webOS TV | LAN WebSocket, port 3000 | `ssap://media.controls/pause` | Approve first pairing on the TV; client key is stored locally. |
-| Roku TV / Roku player | ECP HTTP, port 8060 | Playback-state check, then `keypress/Play` | The app does not send the toggle unless Roku reports active playback; enable mobile-app control when required. |
-| Home Assistant / other brands | Home Assistant REST API | `media_player.media_pause` | Covers Android/Google TV, Fire TV, Sony, Philips, TCL, Hisense, Panasonic and other brands when a compatible Home Assistant `media_player` integration is configured. |
+| Samsung Smart TV | Secure LAN WebSocket on port 8002, with legacy port 8001 fallback | `KEY_PAUSE` | Samsung token in private DataStore |
+| LG webOS TV | LAN WebSocket on port 3000, with secure port 3001 fallback | `ssap://media.controls/pause` | LG client key in private DataStore |
+| Roku TV / Roku player | ECP HTTP, port 8060 | Playback-state check, then `keypress/Play` | None required |
+| Home Assistant / other brands | Home Assistant REST API | `media_player.media_pause` | Long-lived token in private DataStore |
 
-No single vendor-neutral protocol can pause every source on every television. A TV can ignore a command when the current HDMI source or streaming app does not expose transport control. The Home Assistant option is the portable fallback for brands without a direct adapter.
+YAMNet inference still uses TensorFlow Lite Task Audio with mono 16 kHz microphone input. Raw audio is never stored or transmitted.
 
-## Privacy and safety
+## Detection settings
 
-- YAMNet inference is performed on the Android device.
-- Raw audio is never saved or transmitted.
-- Session history stores counts, durations, sound-level summaries and whether a pause succeeded.
-- Home Assistant credentials and TV pairing keys are stored in the app's private DataStore.
-- LG and Roku use their vendors' unauthenticated or paired local-network endpoints, so use SleepPause TV only on a trusted LAN.
-- SleepPause TV is not a medical device and does not diagnose sleep apnea or any health condition.
+- **Minimum YAMNet snoring score:** 10–95%; default 45%.
+- **Consecutive snoring detections:** 1–12; default 2.
+- **Minimum YAMNet breathing score:** 10–95%; default 50%.
+- **Consecutive breathing detections:** 1–12; default 4.
+- **Minimum sound level:** -60 to -25 dBFS; default -42 dBFS.
+- **Sensitivity versus other sounds:** 0–100%; default 50%. Higher values are more permissive when sleep cues overlap competing sounds.
+- **Track device movement:** on by default.
+- **Required time without movement:** 1–60 minutes; default 5 minutes.
+- **Minimum time between automatic pauses:** 1–60 minutes; default 10 minutes.
 
-## Requirements
+Settings are persisted in Android DataStore. Existing installations also migrate the previous single snoring-threshold preference into the new snoring threshold.
 
-- Android 8.0 / API 26 or later;
-- Java 17 and Android Studio with Android SDK 35 for source builds;
-- microphone permission and, on Android 13+, notification permission;
-- Internet access during the first build unless the YAMNet model is downloaded in advance;
-- phone and TV on the same network for direct Samsung, LG or Roku control.
-
-## Build and install
-
-1. Open this folder in Android Studio.
-2. Sync Gradle. The `downloadYamnetModel` task downloads the metadata-enabled TFLite model before `preBuild`.
-3. Build the debug APK with Android Studio (**Build > Build APK(s)**) or Gradle 8.9 (`gradle assembleDebug`).
-4. Install `app/build/outputs/apk/debug/app-debug.apk` on the Android phone.
-
-The source archive intentionally omits the binary Gradle wrapper. Android Studio can use its bundled Gradle installation, or you can generate the wrapper once with `gradle wrapper --gradle-version 8.9`. A GitHub Actions workflow is included at `.github/workflows/build-apk.yml`; pushing the project to GitHub and running **Build Android APK** produces a downloadable debug APK artifact.
-5. Grant microphone and notification permissions.
-
-For an offline build, download the model first:
-
-```bash
-python3 scripts/download_yamnet.py
-gradle assembleDebug --offline
-```
-
-## Configure a TV
+## TV setup
 
 ### Samsung
 
 1. Select **Samsung**.
-2. Enter the TV's local IP address.
+2. Enter the local TV IP address or hostname.
 3. Tap **Connect / pair** and approve the prompt on the TV.
 4. Tap **Test pause**.
+
+The pairing token is stored locally and reused. **Forget pairing key** removes it.
 
 ### LG webOS
 
 1. Select **LG webOS**.
-2. Enter the TV's local IP address.
+2. Enter the local TV IP address or hostname.
 3. Tap **Connect / pair** and approve the prompt on the TV.
 4. Tap **Test pause**.
+
+The client key is stored locally and reused.
 
 ### Roku
 
 1. Select **Roku TV**.
-2. Enter the Roku device's local IP address.
-3. If connection fails, enable control by mobile apps in the Roku network/control settings.
-4. Tap **Test pause**. The app checks Roku's media-player state first and sends the Play/Pause toggle only while playback is active.
+2. Enter the local Roku IP address.
+3. Enable control by mobile apps in Roku settings if required.
+4. Tap **Test pause**.
+
+The app checks playback state before sending Roku's Play/Pause toggle.
 
 ### Home Assistant / other brands
 
-1. Add the TV to Home Assistant and confirm it appears as a `media_player` entity.
+1. Add the TV to Home Assistant as a working `media_player` entity.
 2. Create a Home Assistant long-lived access token.
 3. Select **Home Assistant / other brands**.
-4. Enter the base URL, token and entity ID, for example `media_player.living_room_tv`.
+4. Enter the base URL, token and entity ID.
 5. Tap **Connect / pair**, then **Test pause**.
 
-Prefer an HTTPS Home Assistant URL. HTTP is supported for trusted local installations because some TV LAN APIs also require cleartext traffic.
+Prefer HTTPS. Cleartext HTTP remains available for trusted local installations because some TV LAN APIs require it.
 
-## Detection tuning
+## Requirements
 
-Start with:
+- Android 8.0 / API 26 or later.
+- Java 17.
+- Android SDK 35.
+- Gradle 8.9.
+- Microphone permission and, on Android 13 or later, notification permission.
+- Phone and TV on the same network for direct Samsung, LG or Roku control.
+- Internet access for the first source build unless `yamnet.tflite` is already present.
 
-- minimum sound level: **-42 dBFS**;
-- minimum YAMNet snoring score: **45%**;
-- minimum time between automatic pauses: **10 minutes**.
+## Build
 
-If real snores are missed, move the phone closer before lowering the model threshold. If false positives remain, raise the YAMNet threshold to 55–65% or raise the sound threshold. TV dialogue and music should be rejected automatically, but microphone placement remains important.
+Open the project in Android Studio and build the debug APK, or run:
+
+```bash
+python3 scripts/download_yamnet.py
+gradle testDebugUnitTest assembleDebug
+```
+
+The APK is created at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+The `downloadYamnetModel` Gradle task runs before `preBuild`, so the metadata-enabled model is provisioned automatically when network access is available. The included GitHub Actions workflow also runs the tests and produces a downloadable debug APK artifact.
 
 ## Verification
 
 ```bash
-python3 scripts/verify_project.py
-python3 scripts/download_yamnet.py
+python3 scripts/validate_source.py
 python3 scripts/verify_project.py --require-model
-gradle test
-gradle assembleDebug
+gradle testDebugUnitTest assembleDebug
 ```
 
-Unit tests cover persistence, respiratory context, competing-audio rejection, adaptive noise gating, duplicate-count suppression, and Samsung/LG protocol payloads.
+Unit tests cover independent breathing/snoring thresholds, consecutive-window behavior, combined events, competing-sound sensitivity, configured dB-threshold behavior after loud startup calibration, sustained-event latching, movement gating, pause cooldown, TV endpoint fallback, Home Assistant authorization, and the retained TV protocol payloads.
 
-## Technical notes
+## Privacy and limitations
 
-- Audio input: mono 16 kHz through TensorFlow Lite Task Audio.
-- Model: YAMNet AudioSet classifier.
-- Minimum Android version: API 26.
-- Target/compile SDK: API 35.
-- Version: `3.0.0-universal`.
-
-References:
-
-- TensorFlow YAMNet: https://github.com/tensorflow/models/tree/master/research/audioset/yamnet
-- Samsung Smart TV Web APIs: https://developer.samsung.com/smarttv/develop/api-references/web-api-references.html
-- LG webOS TV developer portal: https://webostv.developer.lge.com/
-- Roku External Control Protocol: https://developer.roku.com/docs/developer-program/dev-tools/external-control-api.md
-- Home Assistant REST API: https://developers.home-assistant.io/docs/api/rest/
+- Audio classification is local.
+- Raw audio is not saved or uploaded.
+- Session history stores counts, duration, sound-level summaries, movement counts and pause outcomes.
+- Pairing keys and tokens are stored in app-private DataStore.
+- Device movement means movement of the phone, not direct body tracking.
+- TV firmware and playback apps can differ; always validate **Connect / pair** and **Test pause** on the target setup.
+- SleepPause TV is not a medical device and does not diagnose sleep disorders.

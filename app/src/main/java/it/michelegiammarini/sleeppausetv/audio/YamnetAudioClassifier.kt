@@ -27,101 +27,140 @@ data class AudioFrame(
     val topScore: Float,
 )
 
-data class SnoreDecision(
-    val confirmed: Boolean,
+enum class SleepEvidence(val displayName: String) {
+    SNORING("Snoring"),
+    BREATHING("Breathing"),
+    COMBINED("Breathing and snoring"),
+}
+
+data class SleepDetectionConfig(
+    val thresholdDb: Float,
+    val snoringConfidence: Float,
+    val snoringConsecutiveDetections: Int,
+    val breathingConfidence: Float,
+    val breathingConsecutiveDetections: Int,
+    val otherSoundSensitivity: Float,
+)
+
+data class SleepDecision(
+    val evidence: SleepEvidence,
     val eventDurationMs: Long,
     val confidence: Float,
+    val snoringConfidence: Float,
     val breathingConfidence: Float,
     val noiseFloorDb: Float,
     val effectiveThresholdDb: Float,
 )
 
 /**
- * Stateful, testable false-positive guard.
+ * Stateful sleep-event detector shared by breathing and snoring.
  *
- * A count is emitted only when YAMNet evidence is persistent, louder than the
- * adaptive room floor, respiratory in context, and dominant over TV/dialogue,
- * music and common household interference. A refractory period prevents one
- * long or fragmented sound from being counted more than once.
+ * The two signals have independent score thresholds and consecutive-window
+ * requirements. Either signal can emit one sleep event; simultaneous evidence
+ * is reported as a combined event. A latch, release rule and refractory period
+ * prevent a sustained sound from incrementing the sleep count repeatedly.
  */
-class SnoreDecisionEngine(
-    private val requiredFrames: Int = 2,
+class SleepDecisionEngine(
     private val releaseFrames: Int = 2,
     private val refractoryFrames: Int = 4,
     private val frameDurationMs: Long = 975,
-    private val minBreathingScore: Float = 0.04f,
-    private val maxCompetingScore: Float = 0.18f,
-    private val minDominance: Float = 0.10f,
-    private val minSnrDb: Float = 6f,
-    private val strongSnoreOffset: Float = 0.18f,
     private val adaptiveNoise: Boolean = true,
     private val calibrationFrames: Int = 6,
 ) {
     private var observedFrames = 0
-    private var consecutiveCandidates = 0
-    private var candidateFrames = 0
+    private var consecutiveSnoring = 0
+    private var consecutiveBreathing = 0
     private var releaseCount = 0
     private var refractoryRemaining = 0
-    private var eventOpen = false
-    private var peakSnoring = 0f
-    private var peakBreathing = 0f
-    private var confidenceSum = 0f
+    private var eventLatched = false
     private var noiseFloorDb = -60f
     private var hasNoiseEstimate = false
 
-    fun accept(frame: AudioFrame, thresholdDb: Float, minSnoringScore: Float): SnoreDecision? {
+    fun accept(frame: AudioFrame, config: SleepDetectionConfig): SleepDecision? {
         if (observedFrames < calibrationFrames) {
             observedFrames++
             updateNoiseFloor(frame.dbFs)
-            resetCandidate()
+            resetCandidates()
             return null
         }
 
         val competing = max(max(frame.speechScore, frame.musicScore), frame.interferenceScore)
-        val strongSnore = frame.snoringScore >= (minSnoringScore + strongSnoreOffset).coerceAtMost(0.95f)
-        val respiratoryContext = frame.breathingScore >= minBreathingScore || strongSnore
-        val modelCandidate = frame.snoringScore >= minSnoringScore &&
-            respiratoryContext &&
-            competing < maxCompetingScore &&
-            frame.snoringScore - competing >= minDominance
+        val sensitivity = config.otherSoundSensitivity.coerceIn(0f, 1f)
+        // The configured YAMNet percentages are the primary acceptance rule. The
+        // competing-sound control may reject a cue only when another class is
+        // clearly stronger; higher sensitivity permits a larger score gap.
+        val allowedCompetingLead = 0.25f * sensitivity
+        val snoringModelCandidate = frame.snoringScore >= config.snoringConfidence &&
+            frame.snoringScore + allowedCompetingLead >= competing
+        val breathingModelCandidate = frame.breathingScore >= config.breathingConfidence &&
+            frame.breathingScore + allowedCompetingLead >= competing
 
-        if (!modelCandidate) updateNoiseFloor(frame.dbFs)
-        val effectiveThreshold = if (adaptiveNoise && hasNoiseEstimate) {
-            max(thresholdDb, noiseFloorDb + minSnrDb)
-        } else thresholdDb
+        if (!snoringModelCandidate && !breathingModelCandidate) updateNoiseFloor(frame.dbFs)
+        // Never raise the threshold selected by the user after calibration. A TV
+        // playing during startup previously made valid score crossings uncountable.
+        val effectiveThreshold = config.thresholdDb
+        val levelAccepted = frame.dbFs >= effectiveThreshold
+        val snoringCandidate = snoringModelCandidate && levelAccepted
+        val breathingCandidate = breathingModelCandidate && levelAccepted
 
-        if (refractoryRemaining > 0 && !eventOpen) {
+        if (eventLatched) {
+            if (snoringCandidate || breathingCandidate) {
+                releaseCount = 0
+            } else {
+                releaseCount++
+                if (releaseCount >= releaseFrames.coerceAtLeast(1)) {
+                    eventLatched = false
+                    releaseCount = 0
+                    refractoryRemaining = refractoryFrames.coerceAtLeast(0)
+                }
+            }
+            return null
+        }
+
+        if (refractoryRemaining > 0) {
             refractoryRemaining--
+            resetCandidates()
             return null
         }
 
-        val candidate = modelCandidate && frame.dbFs >= effectiveThreshold
-        if (candidate) {
-            consecutiveCandidates++
-            candidateFrames++
-            releaseCount = 0
-            peakSnoring = max(peakSnoring, frame.snoringScore)
-            peakBreathing = max(peakBreathing, frame.breathingScore)
-            confidenceSum += frame.snoringScore
-            if (consecutiveCandidates >= requiredFrames) eventOpen = true
-            return null
+        consecutiveSnoring = if (snoringCandidate) consecutiveSnoring + 1 else 0
+        consecutiveBreathing = if (breathingCandidate) consecutiveBreathing + 1 else 0
+
+        val snoringReady = consecutiveSnoring >= config.snoringConsecutiveDetections.coerceIn(1, 12)
+        val breathingReady = consecutiveBreathing >= config.breathingConsecutiveDetections.coerceIn(1, 12)
+        if (!snoringReady && !breathingReady) return null
+
+        // A signal contributes to the event type only after its own sequence is
+        // confirmed. In particular, one incidental snoring frame must not turn
+        // an independently confirmed breathing event into a combined event.
+        val evidence = when {
+            snoringReady && breathingReady -> SleepEvidence.COMBINED
+            snoringReady -> SleepEvidence.SNORING
+            else -> SleepEvidence.BREATHING
+        }
+        val eventFrames = when (evidence) {
+            SleepEvidence.SNORING -> consecutiveSnoring
+            SleepEvidence.BREATHING -> consecutiveBreathing
+            SleepEvidence.COMBINED -> max(consecutiveSnoring, consecutiveBreathing)
+        }
+        val confidence = when (evidence) {
+            SleepEvidence.SNORING -> frame.snoringScore
+            SleepEvidence.BREATHING -> frame.breathingScore
+            SleepEvidence.COMBINED -> max(frame.snoringScore, frame.breathingScore)
         }
 
-        if (eventOpen) {
-            releaseCount++
-            consecutiveCandidates = 0
-            if (releaseCount < releaseFrames) return null
-            return closeEvent(effectiveThreshold)
-        }
-
-        resetCandidate()
-        return null
+        eventLatched = true
+        resetCandidates()
+        return SleepDecision(
+            evidence = evidence,
+            eventDurationMs = eventFrames.coerceAtLeast(1) * frameDurationMs,
+            confidence = confidence,
+            snoringConfidence = frame.snoringScore,
+            breathingConfidence = frame.breathingScore,
+            noiseFloorDb = noiseFloorDb,
+            effectiveThresholdDb = effectiveThreshold,
+        )
     }
-
-    fun flush(thresholdDb: Float = -42f): SnoreDecision? = if (eventOpen) {
-        val effectiveThreshold = if (adaptiveNoise && hasNoiseEstimate) max(thresholdDb, noiseFloorDb + minSnrDb) else thresholdDb
-        closeEvent(effectiveThreshold)
-    } else null
 
     fun currentNoiseFloorDb(): Float = noiseFloorDb
 
@@ -137,41 +176,22 @@ class SnoreDecisionEngine(
         noiseFloorDb = (noiseFloorDb + alpha * (sample - noiseFloorDb)).coerceIn(-85f, -15f)
     }
 
-    private fun closeEvent(effectiveThreshold: Float): SnoreDecision {
-        val result = SnoreDecision(
-            confirmed = true,
-            eventDurationMs = candidateFrames * frameDurationMs,
-            confidence = if (candidateFrames > 0) confidenceSum / candidateFrames else peakSnoring,
-            breathingConfidence = peakBreathing,
-            noiseFloorDb = noiseFloorDb,
-            effectiveThresholdDb = effectiveThreshold,
-        )
-        resetCandidate()
-        refractoryRemaining = refractoryFrames
-        return result
-    }
-
-    private fun resetCandidate() {
-        consecutiveCandidates = 0
-        candidateFrames = 0
-        releaseCount = 0
-        eventOpen = false
-        peakSnoring = 0f
-        peakBreathing = 0f
-        confidenceSum = 0f
+    private fun resetCandidates() {
+        consecutiveSnoring = 0
+        consecutiveBreathing = 0
     }
 }
 
 internal object YamnetScoreMapper {
     private val speechLabels = setOf(
         "speech", "child speech, kid speaking", "conversation", "narration, monologue",
-        "babbling", "speech synthesizer", "whispering", "shout", "yell", "screaming"
+        "babbling", "speech synthesizer", "whispering", "shout", "yell", "screaming",
     )
     private val interferenceTerms = setOf(
         "television", "radio", "video game", "vehicle", "engine", "motor", "fan",
         "air conditioning", "vacuum cleaner", "hair dryer", "alarm", "siren", "typing",
         "keyboard", "dishes", "cutlery", "door", "dog", "cat", "cough", "sneeze",
-        "laughter", "crying", "yawn", "sawing", "chainsaw"
+        "laughter", "crying", "yawn", "sawing", "chainsaw",
     )
 
     fun from(categories: List<Category>, dbFs: Float): AudioFrame {
@@ -204,7 +224,7 @@ internal object YamnetScoreMapper {
 /** Local-only YAMNet inference using 16 kHz mono input from Task Audio. */
 class YamnetMicrophoneMonitor(
     private val context: Context,
-    private val engine: SnoreDecisionEngine = SnoreDecisionEngine(),
+    private val engine: SleepDecisionEngine = SleepDecisionEngine(),
 ) : Closeable {
     companion object { const val MODEL_FILE = "yamnet.tflite" }
 
@@ -213,17 +233,15 @@ class YamnetMicrophoneMonitor(
 
     @SuppressLint("MissingPermission")
     suspend fun run(
-        thresholdDb: () -> Float,
-        minSnoringScore: () -> Float,
+        config: () -> SleepDetectionConfig,
         onFrame: (AudioFrame) -> Unit,
-        onSnore: (SnoreDecision, AudioFrame) -> Unit,
+        onSleep: (SleepDecision, AudioFrame) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val localClassifier = AudioClassifier.createFromFile(context, MODEL_FILE)
         classifier = localClassifier
         val tensorAudio = localClassifier.createInputTensorAudio()
         val localRecorder = localClassifier.createAudioRecord()
         recorder = localRecorder
-        var lastFrame = emptyFrame()
 
         try {
             localRecorder.startRecording()
@@ -232,12 +250,11 @@ class YamnetMicrophoneMonitor(
                 val samples = tensorAudio.tensorBuffer.floatArray
                 val dbFs = calculateDbFs(samples)
                 val categories = localClassifier.classify(tensorAudio).flatMap { it.categories }
-                lastFrame = YamnetScoreMapper.from(categories, dbFs)
-                onFrame(lastFrame)
-                engine.accept(lastFrame, thresholdDb(), minSnoringScore())?.let { onSnore(it, lastFrame) }
+                val frame = YamnetScoreMapper.from(categories, dbFs)
+                onFrame(frame)
+                engine.accept(frame, config())?.let { onSleep(it, frame) }
             }
         } catch (cancelled: CancellationException) {
-            // Do not turn an in-progress candidate into a count when the user stops.
             throw cancelled
         } finally {
             close()
@@ -261,6 +278,4 @@ class YamnetMicrophoneMonitor(
         val rms = sqrt(sumSquares / samples.size).coerceAtLeast(1e-9)
         return (20.0 * log10(rms)).toFloat().coerceIn(-90f, 0f)
     }
-
-    private fun emptyFrame() = AudioFrame(-90f, 0f, 0f, 0f, 0f, 0f, "No sound", 0f)
 }

@@ -4,7 +4,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object LgWebOsProtocol {
-    fun remoteUrl(host: String): String = "ws://${host.trim()}:3000/"
+    fun remoteUrl(host: String, secure: Boolean = false): String {
+        val scheme = if (secure) "wss" else "ws"
+        val port = if (secure) 3001 else 3000
+        return "$scheme://${host.trim()}:$port/"
+    }
 
     fun registerPayload(clientKey: String): String {
         val permissions = JSONArray(listOf("LAUNCH", "CONTROL_AUDIO", "CONTROL_INPUT_MEDIA_PLAYBACK"))

@@ -1,34 +1,34 @@
 # Verification report
 
-Version: 3.0.0-universal  
-Date: 2026-09-17
+Version: 4.0.2-fix  
+Date: 2026-09-20
 
-## Completed in this environment
+## Corrected behavior
 
-- Required source-file and feature-marker verification passed.
-- Kotlin delimiter/structure scan passed for all 24 Kotlin source files.
-- All four XML files parsed successfully.
-- English UI scan passed for the app source and user documentation.
-- Python helper scripts compiled successfully.
-- ZIP integrity test passed after packaging.
-- Fifteen JUnit test methods are included for detector and protocol behavior.
+- Sustained breathing can confirm a sleep event without any confirmed snoring sequence. A single coincident snoring candidate no longer relabels the breathing event as combined.
+- Breathing-only detection still applies the configured dBFS threshold, consecutive-window requirement and competing-sound false-positive filter.
+- The existing recent-movement gate, automatic-pause cooldown and TV pause dispatch remain in the event path.
+- Repeated breathing or snoring scores above their configured percentages can now satisfy the consecutive-window counter without a hidden absolute competing-sound ceiling.
+- Startup noise calibration no longer raises the selected minimum dBFS threshold, which previously could prevent otherwise valid events from being counted.
+- The configurable other-sound sensitivity remains active as a relative allowance; higher values permit a larger score gap while preserving the competing-sound check.
+- A confirmed event still increments the live counter before database or TV network work starts.
+- Home Assistant now receives the actual configured long-lived token in a Bearer authorization header.
+- Samsung first uses secure WebSocket port 8002 and falls back to legacy port 8001; LG first uses port 3000 and falls back to secure port 3001.
+- Samsung and LG retry a connection if a pause is attempted on a stale channel and recognize HTTP authorization failures during pairing recovery.
 
-## Not executed in this environment
+## Automated checks in this environment
 
-An Android SDK and Gradle 8.9 were not installed in the build container, and direct toolchain/model downloads were blocked. Therefore the Android compiler, JUnit suite and APK build were not executed here. The archive includes:
+- `python3 scripts/validate_source.py`: passed.
+- `python3 scripts/verify_project.py`: passed.
+- Kotlin delimiter and structural scan: passed for 27 Kotlin files.
+- XML parse validation: passed for 4 XML files.
+- Python helper syntax compilation: passed.
+- Twenty-five JUnit test methods are included, including breathing autonomy, breathing false-positive filtering, movement gating, pause cooldown, corrected detection thresholds, connection fallback, and Home Assistant authorization behavior.
 
-- Android Studio-compatible project files;
-- `build_apk.sh` for a local Gradle 8.9 build;
-- `.github/workflows/build-apk.yml` to run tests and produce a downloadable debug APK in GitHub Actions;
-- automatic YAMNet model provisioning during `preBuild`.
+## Build limitation
+
+A full Android compile, JUnit execution and APK build cannot be run in this container because Gradle and the Android SDK are not installed. No APK is claimed or included. The source project is intended for Android Studio, Gradle 8.9, or the included GitHub Actions workflow; `preBuild` provisions the metadata-enabled YAMNet model.
 
 ## Device validation still required
 
-TV vendors and firmware versions can differ. Before unattended use, validate **Connect / pair** and **Test pause** with the target TV and active playback app. In particular:
-
-- Samsung firmware may require re-approval after a reset or network change.
-- LG webOS must accept the first pairing prompt and allow media-control permissions.
-- Roku must permit mobile-app control; SleepPause checks playback state before sending its Play/Pause toggle.
-- Home Assistant must expose a working `media_player` entity whose integration supports `media_pause`.
-
-The detector is not a medical classifier. Tune the threshold only after testing with the phone in its intended bedside position.
+TV behavior varies by model, firmware and active playback application. Validate **Connect / pair** and **Test pause** on the target TV. Sleep-detection settings should also be tuned with the phone in its intended bedside position. SleepPause TV is not a medical device.

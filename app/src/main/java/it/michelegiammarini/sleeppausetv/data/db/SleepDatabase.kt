@@ -4,9 +4,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [SleepSessionEntity::class, SnoreEventEntity::class],
+    entities = [SleepSessionEntity::class, SleepEventEntity::class],
     version = 1,
-    exportSchema = false
+    exportSchema = false,
 )
 abstract class SleepDatabase : RoomDatabase() {
     abstract fun sleepDao(): SleepDao

@@ -72,9 +72,10 @@ fun SleepPauseScreen(viewModel: MainViewModel, ensurePermissions: (() -> Unit) -
                 interferenceScore = monitor.interferenceScore,
                 topLabel = monitor.topLabel,
                 topScore = monitor.topScore,
-                snores = monitor.snoreCount,
+                sleepEvents = monitor.sleepEventCount,
                 movements = monitor.movementCount,
                 pauses = monitor.pauseCount,
+                lastEvidence = monitor.lastSleepEvidence,
                 status = monitor.lastMessage,
                 onStart = { ensurePermissions(viewModel::startMonitoring) },
                 onStop = viewModel::stopMonitoring,
@@ -83,40 +84,17 @@ fun SleepPauseScreen(viewModel: MainViewModel, ensurePermissions: (() -> Unit) -
             message?.let {
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = if (it.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+                        containerColor = if (it.isError) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        },
                     ),
                 ) { Text(it.text, Modifier.padding(12.dp)) }
             }
 
             TvConnectionCard(settings, viewModel)
-
-            SectionCard("Detection and automation") {
-                LabelSwitch("Pause TV after a confirmed snore", settings.automaticPause, viewModel::setAutoPause)
-                LabelSwitch("Track device movement", settings.monitorMovement, viewModel::setMonitorMovement)
-                Text("Minimum sound level: ${settings.sensitivityDb.roundToInt()} dBFS")
-                Slider(
-                    value = settings.sensitivityDb,
-                    onValueChange = viewModel::setSensitivity,
-                    valueRange = -60f..-25f,
-                )
-                Text("Minimum YAMNet snoring score: ${(settings.minConfidence * 100).roundToInt()}%")
-                Slider(
-                    value = settings.minConfidence,
-                    onValueChange = viewModel::setConfidence,
-                    valueRange = 0.25f..0.85f,
-                )
-                Text("Minimum time between automatic pauses: ${settings.pauseCooldownMinutes} min")
-                Slider(
-                    value = settings.pauseCooldownMinutes.toFloat(),
-                    onValueChange = { viewModel.setCooldown(it.roundToInt()) },
-                    valueRange = 1f..30f,
-                    steps = 28,
-                )
-                Text(
-                    "False-positive protection starts with a short room calibration, then uses an adaptive noise floor, a 6 dB signal-to-noise gate, multi-window confirmation, a refractory period, respiratory context, and rejection of speech, music, TV and household-noise classes. Audio is processed locally and is never stored or transmitted. This is not a medical device.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            DetectionCard(settings, viewModel)
 
             SectionCard("Recent sessions") {
                 if (history.isEmpty()) Text("No saved sessions")
@@ -128,6 +106,110 @@ fun SleepPauseScreen(viewModel: MainViewModel, ensurePermissions: (() -> Unit) -
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+@Composable
+private fun DetectionCard(settings: AppSettings, viewModel: MainViewModel) {
+    SectionCard("Sleep detection and automation") {
+        LabelSwitch(
+            "Pause the TV after a confirmed sleep event",
+            settings.automaticPause,
+            viewModel::setAutoPause,
+        )
+
+        Text("Snoring", style = MaterialTheme.typography.titleSmall)
+        PercentageSlider(
+            label = "Minimum YAMNet snoring score",
+            value = settings.snoringConfidence,
+            onValueChange = viewModel::setSnoringConfidence,
+        )
+        IntegerSlider(
+            label = "Consecutive snoring detections",
+            value = settings.snoringConsecutiveDetections,
+            range = 1..12,
+            onValueChange = viewModel::setSnoringConsecutive,
+        )
+
+        HorizontalDivider()
+        Text("Breathing", style = MaterialTheme.typography.titleSmall)
+        PercentageSlider(
+            label = "Minimum YAMNet breathing score",
+            value = settings.breathingConfidence,
+            onValueChange = viewModel::setBreathingConfidence,
+        )
+        IntegerSlider(
+            label = "Consecutive breathing detections",
+            value = settings.breathingConsecutiveDetections,
+            range = 1..12,
+            onValueChange = viewModel::setBreathingConsecutive,
+        )
+
+        HorizontalDivider()
+        Text("Minimum sound level: ${settings.sensitivityDb.roundToInt()} dBFS")
+        Slider(
+            value = settings.sensitivityDb,
+            onValueChange = viewModel::setSensitivity,
+            valueRange = -60f..-25f,
+        )
+        Text("Sensitivity versus other sounds: ${(settings.otherSoundSensitivity * 100).roundToInt()}%")
+        Slider(
+            value = settings.otherSoundSensitivity,
+            onValueChange = viewModel::setOtherSoundSensitivity,
+            valueRange = 0f..1f,
+        )
+        Text(
+            "Higher values allow breathing or snoring to remain valid when speech, music, TV audio or household scores are stronger. At 100%, the configured sleep percentage is not raised by this filter.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
+        HorizontalDivider()
+        LabelSwitch("Track device movement", settings.monitorMovement, viewModel::setMonitorMovement)
+        if (settings.monitorMovement) {
+            IntegerSlider(
+                label = "Required time without movement (minutes)",
+                value = settings.noMovementMinutes,
+                range = 1..60,
+                onValueChange = viewModel::setNoMovementMinutes,
+            )
+            Text(
+                "The TV is paused only when a sleep event is confirmed and no device movement has been detected for this period.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            Text(
+                "Movement gating is off. A confirmed sleep event may pause the TV immediately, subject to the cooldown.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        IntegerSlider(
+            label = "Minimum time between automatic pauses (minutes)",
+            value = settings.pauseCooldownMinutes,
+            range = 1..60,
+            onValueChange = viewModel::setCooldown,
+        )
+        Text(
+            "A sleep event is created when either signal reaches its own threshold for the configured number of consecutive YAMNet windows. If both are present, one combined event is counted. Detection runs locally; raw audio is never saved or transmitted. This is not a medical device.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun PercentageSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
+    Text("$label: ${(value * 100).roundToInt()}%")
+    Slider(value = value, onValueChange = onValueChange, valueRange = 0.10f..0.95f)
+}
+
+@Composable
+private fun IntegerSlider(label: String, value: Int, range: IntRange, onValueChange: (Int) -> Unit) {
+    Text("$label: $value")
+    Slider(
+        value = value.toFloat(),
+        onValueChange = { onValueChange(it.roundToInt()) },
+        valueRange = range.first.toFloat()..range.last.toFloat(),
+        steps = (range.last - range.first - 1).coerceAtLeast(0),
+    )
 }
 
 @Composable
@@ -184,7 +266,11 @@ private fun TvConnectionCard(settings: AppSettings, viewModel: MainViewModel) {
             )
             if (settings.tvBrand == TvBrand.SAMSUNG || settings.tvBrand == TvBrand.LG_WEBOS) {
                 Text(
-                    if (settings.tvToken.isBlank()) "Pairing key: not acquired" else "Pairing key: saved locally ••••${settings.tvToken.takeLast(4)}",
+                    if (settings.tvToken.isBlank()) {
+                        "Pairing key: not acquired"
+                    } else {
+                        "Pairing key: saved locally ••••${settings.tvToken.takeLast(4)}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -192,7 +278,7 @@ private fun TvConnectionCard(settings: AppSettings, viewModel: MainViewModel) {
                 when (settings.tvBrand) {
                     TvBrand.SAMSUNG -> "The first connection prompts for approval on the Samsung TV."
                     TvBrand.LG_WEBOS -> "The first connection prompts for approval on the LG webOS TV."
-                    TvBrand.ROKU -> "Enable Settings > System > Advanced system settings > Control by mobile apps if required. Roku uses a Play/Pause toggle."
+                    TvBrand.ROKU -> "Enable control by mobile apps in Roku settings if required. Roku uses a Play/Pause toggle."
                     TvBrand.HOME_ASSISTANT -> ""
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -234,9 +320,10 @@ private fun MonitorCard(
     interferenceScore: Float,
     topLabel: String,
     topScore: Float,
-    snores: Int,
+    sleepEvents: Int,
     movements: Int,
     pauses: Int,
+    lastEvidence: String,
     status: String,
     onStart: () -> Unit,
     onStop: () -> Unit,
@@ -245,15 +332,26 @@ private fun MonitorCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Bedtime, contentDescription = null)
-                Text(if (running) " Monitoring" else " Monitoring stopped", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (running) " Monitoring" else " Monitoring stopped",
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
             Text(status)
             if (running) {
                 Text("${db.roundToInt()} dBFS • $topLabel ${(topScore * 100).roundToInt()}%")
-                Text("Snoring ${(snoringScore * 100).roundToInt()}% • Breathing ${(breathingScore * 100).roundToInt()}%")
-                Text("Rejectors: speech ${(speechScore * 100).roundToInt()}% • music ${(musicScore * 100).roundToInt()}% • other ${(interferenceScore * 100).roundToInt()}%")
-                Text("Snores $snores  •  Movements $movements  •  TV pauses $pauses")
-                Button(onClick = onStop) { Icon(Icons.Default.Stop, null); Text(" Stop and save") }
+                Text(
+                    "Snoring ${(snoringScore * 100).roundToInt()}% • Breathing ${(breathingScore * 100).roundToInt()}%",
+                )
+                Text(
+                    "Other sounds: speech ${(speechScore * 100).roundToInt()}% • music ${(musicScore * 100).roundToInt()}% • interference ${(interferenceScore * 100).roundToInt()}%",
+                )
+                Text("Sleep events $sleepEvents • Movements $movements • TV pauses $pauses")
+                if (sleepEvents > 0) Text("Last sleep evidence: $lastEvidence")
+                Button(onClick = onStop) {
+                    Icon(Icons.Default.Stop, contentDescription = null)
+                    Text(" Stop and save")
+                }
             } else {
                 Button(onClick = onStart) { Text("Start session") }
             }
@@ -289,7 +387,14 @@ private fun SessionRow(item: SleepSessionEntity) {
     val duration = item.endedAt?.let { TimeUnit.MILLISECONDS.toMinutes(it - item.startedAt) }
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(start, style = MaterialTheme.typography.titleSmall)
-        Text("${duration?.let { "$it min" } ?: "in progress"} • ${item.snoreCount} snores • ${item.movementCount} movements • ${item.automaticPauses} pauses")
-        if (item.endedAt != null) Text("Average noise ${item.averageNoiseDb.roundToInt()} dBFS", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "${duration?.let { "$it min" } ?: "in progress"} • ${item.sleepEventCount} sleep events • ${item.movementCount} movements • ${item.automaticPauses} pauses",
+        )
+        if (item.endedAt != null) {
+            Text(
+                "Average noise ${item.averageNoiseDb.roundToInt()} dBFS",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }

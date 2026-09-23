@@ -14,15 +14,19 @@ data class MonitorState(
     val interferenceScore: Float = 0f,
     val topLabel: String = "No sound",
     val topScore: Float = 0f,
-    val snoreCount: Int = 0,
+    val sleepEventCount: Int = 0,
     val movementCount: Int = 0,
     val pauseCount: Int = 0,
+    val lastSleepEvidence: String = "None",
     val lastMessage: String = "Ready",
 )
 
 object MonitorBus {
     private val mutable = MutableStateFlow(MonitorState())
     val state = mutable.asStateFlow()
+    @Synchronized
     fun update(block: (MonitorState) -> MonitorState) { mutable.value = block(mutable.value) }
+
+    @Synchronized
     fun reset() { mutable.value = MonitorState() }
 }

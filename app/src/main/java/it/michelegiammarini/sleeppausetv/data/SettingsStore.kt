@@ -32,10 +32,15 @@ data class AppSettings(
     val homeAssistantToken: String = "",
     val homeAssistantEntity: String = "",
     val sensitivityDb: Float = -42f,
-    val minConfidence: Float = 0.45f,
+    val snoringConfidence: Float = 0.45f,
+    val snoringConsecutiveDetections: Int = 2,
+    val breathingConfidence: Float = 0.50f,
+    val breathingConsecutiveDetections: Int = 4,
+    val otherSoundSensitivity: Float = 0.50f,
     val pauseCooldownMinutes: Int = 10,
     val automaticPause: Boolean = true,
     val monitorMovement: Boolean = true,
+    val noMovementMinutes: Int = 5,
 )
 
 class SettingsStore(private val context: Context) {
@@ -47,10 +52,16 @@ class SettingsStore(private val context: Context) {
         val homeAssistantToken = stringPreferencesKey("home_assistant_token")
         val homeAssistantEntity = stringPreferencesKey("home_assistant_entity")
         val sensitivityDb = floatPreferencesKey("sensitivity_db")
-        val minConfidence = floatPreferencesKey("min_confidence")
+        val legacyMinConfidence = floatPreferencesKey("min_confidence")
+        val snoringConfidence = floatPreferencesKey("snoring_confidence")
+        val snoringConsecutive = intPreferencesKey("snoring_consecutive_detections")
+        val breathingConfidence = floatPreferencesKey("breathing_confidence")
+        val breathingConsecutive = intPreferencesKey("breathing_consecutive_detections")
+        val otherSoundSensitivity = floatPreferencesKey("other_sound_sensitivity")
         val pauseCooldown = intPreferencesKey("pause_cooldown_minutes")
         val automaticPause = booleanPreferencesKey("automatic_pause")
         val monitorMovement = booleanPreferencesKey("monitor_movement")
+        val noMovementMinutes = intPreferencesKey("no_movement_minutes")
     }
 
     val values: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -62,10 +73,15 @@ class SettingsStore(private val context: Context) {
             homeAssistantToken = p[Keys.homeAssistantToken] ?: "",
             homeAssistantEntity = p[Keys.homeAssistantEntity] ?: "",
             sensitivityDb = p[Keys.sensitivityDb] ?: -42f,
-            minConfidence = p[Keys.minConfidence] ?: 0.45f,
-            pauseCooldownMinutes = p[Keys.pauseCooldown] ?: 10,
+            snoringConfidence = p[Keys.snoringConfidence] ?: p[Keys.legacyMinConfidence] ?: 0.45f,
+            snoringConsecutiveDetections = (p[Keys.snoringConsecutive] ?: 2).coerceIn(1, 12),
+            breathingConfidence = p[Keys.breathingConfidence] ?: 0.50f,
+            breathingConsecutiveDetections = (p[Keys.breathingConsecutive] ?: 4).coerceIn(1, 12),
+            otherSoundSensitivity = (p[Keys.otherSoundSensitivity] ?: 0.50f).coerceIn(0f, 1f),
+            pauseCooldownMinutes = (p[Keys.pauseCooldown] ?: 10).coerceIn(1, 60),
             automaticPause = p[Keys.automaticPause] ?: true,
             monitorMovement = p[Keys.monitorMovement] ?: true,
+            noMovementMinutes = (p[Keys.noMovementMinutes] ?: 5).coerceIn(1, 60),
         )
     }
 
@@ -80,9 +96,14 @@ class SettingsStore(private val context: Context) {
     suspend fun setHomeAssistantUrl(value: String) = context.dataStore.edit { it[Keys.homeAssistantUrl] = value.trim() }
     suspend fun setHomeAssistantToken(value: String) = context.dataStore.edit { it[Keys.homeAssistantToken] = value.trim() }
     suspend fun setHomeAssistantEntity(value: String) = context.dataStore.edit { it[Keys.homeAssistantEntity] = value.trim() }
-    suspend fun setSensitivity(value: Float) = context.dataStore.edit { it[Keys.sensitivityDb] = value }
-    suspend fun setMinConfidence(value: Float) = context.dataStore.edit { it[Keys.minConfidence] = value }
-    suspend fun setPauseCooldown(value: Int) = context.dataStore.edit { it[Keys.pauseCooldown] = value }
+    suspend fun setSensitivity(value: Float) = context.dataStore.edit { it[Keys.sensitivityDb] = value.coerceIn(-60f, -25f) }
+    suspend fun setSnoringConfidence(value: Float) = context.dataStore.edit { it[Keys.snoringConfidence] = value.coerceIn(0.10f, 0.95f) }
+    suspend fun setSnoringConsecutiveDetections(value: Int) = context.dataStore.edit { it[Keys.snoringConsecutive] = value.coerceIn(1, 12) }
+    suspend fun setBreathingConfidence(value: Float) = context.dataStore.edit { it[Keys.breathingConfidence] = value.coerceIn(0.10f, 0.95f) }
+    suspend fun setBreathingConsecutiveDetections(value: Int) = context.dataStore.edit { it[Keys.breathingConsecutive] = value.coerceIn(1, 12) }
+    suspend fun setOtherSoundSensitivity(value: Float) = context.dataStore.edit { it[Keys.otherSoundSensitivity] = value.coerceIn(0f, 1f) }
+    suspend fun setPauseCooldown(value: Int) = context.dataStore.edit { it[Keys.pauseCooldown] = value.coerceIn(1, 60) }
     suspend fun setAutomaticPause(value: Boolean) = context.dataStore.edit { it[Keys.automaticPause] = value }
     suspend fun setMonitorMovement(value: Boolean) = context.dataStore.edit { it[Keys.monitorMovement] = value }
+    suspend fun setNoMovementMinutes(value: Int) = context.dataStore.edit { it[Keys.noMovementMinutes] = value.coerceIn(1, 60) }
 }

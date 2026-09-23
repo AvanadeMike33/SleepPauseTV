@@ -10,6 +10,8 @@ class LgWebOsProtocolTest {
         val json = JSONObject(LgWebOsProtocol.pausePayload())
         assertEquals("request", json.getString("type"))
         assertEquals("ssap://media.controls/pause", json.getString("uri"))
+        assertTrue(LgWebOsProtocol.remoteUrl("192.168.1.50").startsWith("ws://192.168.1.50:3000/"))
+        assertTrue(LgWebOsProtocol.remoteUrl("192.168.1.50", secure = true).startsWith("wss://192.168.1.50:3001/"))
     }
 
     @Test fun registrationIncludesStoredClientKey() {

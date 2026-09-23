@@ -3,14 +3,6 @@
   "WorkspaceRootPath": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\MODEL_LICENSE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:MODEL_LICENSE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\scripts\\verify_project.py||{3B902123-F8A7-4915-9F01-361F908088D0}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:scripts\\verify_project.py||{3B902123-F8A7-4915-9F01-361F908088D0}"
     },
@@ -47,32 +39,6 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "MODEL_LICENSE.md",
-              "DocumentMoniker": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\MODEL_LICENSE.md",
-              "RelativeDocumentMoniker": "MODEL_LICENSE.md",
-              "ToolTip": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\MODEL_LICENSE.md",
-              "RelativeToolTip": "MODEL_LICENSE.md",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAZAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2026-09-17T16:10:01.581Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "LgWebOsProtocol.kt",
-              "DocumentMoniker": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt",
-              "RelativeDocumentMoniker": "app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt",
-              "ToolTip": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt",
-              "RelativeToolTip": "app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\tv\\LgWebOsProtocol.kt",
-              "ViewState": "AgIAABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-09-17T16:07:52.324Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
               "Title": "verify_project.py",
               "DocumentMoniker": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\scripts\\verify_project.py",
               "RelativeDocumentMoniker": "scripts\\verify_project.py",
@@ -85,7 +51,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 1,
               "Title": "SnoreDetector.kt",
               "DocumentMoniker": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\audio\\SnoreDetector.kt",
               "RelativeDocumentMoniker": "app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\audio\\SnoreDetector.kt",
@@ -93,11 +59,12 @@
               "RelativeToolTip": "app\\src\\main\\java\\it\\michelegiammarini\\sleeppausetv\\audio\\SnoreDetector.kt",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-09-17T06:42:25.804Z"
+              "WhenOpened": "2026-09-17T06:42:25.804Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 2,
               "Title": ".gitignore",
               "DocumentMoniker": "C:\\Users\\michele.giammarini\\source\\repos\\SleepPauseTV_MVP\\.gitignore",
               "RelativeDocumentMoniker": ".gitignore",
@@ -105,7 +72,8 @@
               "RelativeToolTip": ".gitignore",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-09-17T06:41:57.872Z"
+              "WhenOpened": "2026-09-17T06:41:57.872Z",
+              "EditorCaption": ""
             }
           ]
         }

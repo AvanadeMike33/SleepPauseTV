@@ -12,7 +12,9 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -20,12 +22,14 @@ import it.michelegiammarini.sleeppausetv.MainActivity
 import it.michelegiammarini.sleeppausetv.R
 import it.michelegiammarini.sleeppausetv.SleepPauseApp
 import it.michelegiammarini.sleeppausetv.audio.AudioFrame
-import it.michelegiammarini.sleeppausetv.audio.SnoreDecision
+import it.michelegiammarini.sleeppausetv.audio.SleepDecision
+import it.michelegiammarini.sleeppausetv.audio.SleepDetectionConfig
 import it.michelegiammarini.sleeppausetv.audio.YamnetMicrophoneMonitor
 import it.michelegiammarini.sleeppausetv.data.AppSettings
+import it.michelegiammarini.sleeppausetv.data.db.SleepEventEntity
 import it.michelegiammarini.sleeppausetv.data.db.SleepSessionEntity
-import it.michelegiammarini.sleeppausetv.data.db.SnoreEventEntity
 import it.michelegiammarini.sleeppausetv.tv.TvResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +37,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -48,21 +54,28 @@ class SleepMonitorService : Service(), SensorEventListener {
     private val container get() = (application as SleepPauseApp).container
     private var monitorJob: Job? = null
     private var settingsJob: Job? = null
-    private var currentSettings = AppSettings()
+    @Volatile private var currentSettings = AppSettings()
     private var session: SleepSessionEntity? = null
     private var noiseSum = 0.0
     private var frameCount = 0L
     private var maxNoiseDb = -90f
-    private var snoreDuration = 0L
+    private var sleepEventDuration = 0L
     private var lastPauseAt = 0L
+    private val pauseMutex = Mutex()
     private var wakeLock: PowerManager.WakeLock? = null
     private var sensorManager: SensorManager? = null
-    private var lastMotionAt = 0L
+    @Volatile private var lastMotionAt = 0L
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        settingsJob = scope.launch { container.settings.values.collectLatest { currentSettings = it } }
+        settingsJob = scope.launch {
+            container.settings.values.collectLatest { updated ->
+                val movementSettingChanged = currentSettings.monitorMovement != updated.monitorMovement
+                currentSettings = updated
+                if (monitorJob != null && movementSettingChanged) updateMotionTracking(updated.monitorMovement)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -79,36 +92,56 @@ class SleepMonitorService : Service(), SensorEventListener {
             stopSelf()
             return
         }
-        resetSessionCounters()
-        startForeground(NOTIFICATION_ID, notification("Local YAMNet monitoring is active"))
+
+        startForeground(NOTIFICATION_ID, notification("Local YAMNet sleep monitoring is active"))
         acquireWakeLock()
-        startMotionTracking()
         monitorJob = scope.launch {
+            currentSettings = container.settings.snapshot()
             val startedAt = System.currentTimeMillis()
+            resetSessionCounters(startedAt)
+            updateMotionTracking(currentSettings.monitorMovement)
             val id = container.database.sleepDao().insertSession(SleepSessionEntity(startedAt = startedAt))
             session = SleepSessionEntity(id = id, startedAt = startedAt)
-            MonitorBus.update { MonitorState(running = true, sessionStartedAt = startedAt, lastMessage = "Listening for sustained snoring") }
+            MonitorBus.update {
+                MonitorState(
+                    running = true,
+                    sessionStartedAt = startedAt,
+                    lastMessage = "Listening for breathing and snoring sleep cues",
+                )
+            }
             try {
                 YamnetMicrophoneMonitor(this@SleepMonitorService).run(
-                    thresholdDb = { currentSettings.sensitivityDb },
-                    minSnoringScore = { currentSettings.minConfidence },
+                    config = ::currentDetectionConfig,
                     onFrame = ::onAudioFrame,
-                    onSnore = ::onSnoreDetected,
+                    onSleep = ::onSleepDetected,
                 )
-            } catch (e: Exception) {
-                MonitorBus.update { it.copy(lastMessage = e.message ?: "Classifier or microphone error") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                MonitorBus.update { it.copy(lastMessage = error.message ?: "Classifier or microphone error") }
                 stopSelf()
             }
         }
     }
 
-    private fun resetSessionCounters() {
+    private fun currentDetectionConfig(): SleepDetectionConfig = currentSettings.let {
+        SleepDetectionConfig(
+            thresholdDb = it.sensitivityDb,
+            snoringConfidence = it.snoringConfidence,
+            snoringConsecutiveDetections = it.snoringConsecutiveDetections,
+            breathingConfidence = it.breathingConfidence,
+            breathingConsecutiveDetections = it.breathingConsecutiveDetections,
+            otherSoundSensitivity = it.otherSoundSensitivity,
+        )
+    }
+
+    private fun resetSessionCounters(startedAt: Long) {
         noiseSum = 0.0
         frameCount = 0L
         maxNoiseDb = -90f
-        snoreDuration = 0L
+        sleepEventDuration = 0L
         lastPauseAt = 0L
-        lastMotionAt = 0L
+        lastMotionAt = startedAt
     }
 
     private fun onAudioFrame(frame: AudioFrame) {
@@ -129,40 +162,89 @@ class SleepMonitorService : Service(), SensorEventListener {
         }
     }
 
-    private fun onSnoreDetected(decision: SnoreDecision, frame: AudioFrame) {
+    private fun onSleepDetected(decision: SleepDecision, frame: AudioFrame) {
         val activeSession = session ?: return
-        scope.launch {
-            val now = System.currentTimeMillis()
-            val cooldownMs = currentSettings.pauseCooldownMinutes * 60_000L
-            val shouldPause = currentSettings.automaticPause && now - lastPauseAt >= cooldownMs
-            val tvResult = if (shouldPause) container.tvClient.sendPause() else null
-            val paused = tvResult is TvResult.Success
-            if (paused) lastPauseAt = now
-            snoreDuration += decision.eventDurationMs
-            val newSnoreCount = MonitorBus.state.value.snoreCount + 1
-            container.database.sleepDao().insertSnoreEvent(
-                SnoreEventEntity(
-                    sessionId = activeSession.id,
-                    occurredAt = now,
-                    durationMs = decision.eventDurationMs,
-                    peakDb = frame.dbFs,
-                    confidence = decision.confidence,
-                    tvPaused = paused,
-                ),
+        val occurredAt = System.currentTimeMillis()
+        sleepEventDuration += decision.eventDurationMs
+        var newSleepEventCount = 0
+        MonitorBus.update {
+            newSleepEventCount = it.sleepEventCount + 1
+            it.copy(
+                sleepEventCount = newSleepEventCount,
+                lastSleepEvidence = decision.evidence.displayName,
+                lastMessage = "Sleep detected by ${decision.evidence.displayName}; checking automatic pause",
             )
+        }
+        updateNotification(
+            "Sleep events: $newSleepEventCount • Pauses: ${MonitorBus.state.value.pauseCount}",
+        )
+
+        scope.launch {
+            val pendingEvent = SleepEventEntity(
+                sessionId = activeSession.id,
+                occurredAt = occurredAt,
+                durationMs = decision.eventDurationMs,
+                peakDb = frame.dbFs,
+                confidence = decision.confidence,
+                tvPaused = false,
+            )
+            val persistedEvent = runCatching {
+                val id = container.database.sleepDao().insertSleepEvent(pendingEvent)
+                pendingEvent.copy(id = id)
+            }.getOrNull()
+
+            val (settings, eligibility, tvResult) = pauseMutex.withLock {
+                val latestSettings = currentSettings
+                val pauseAttemptAt = System.currentTimeMillis()
+                val latestEligibility = PausePolicy.evaluate(
+                    automaticPause = latestSettings.automaticPause,
+                    monitorMovement = latestSettings.monitorMovement,
+                    noMovementMinutes = latestSettings.noMovementMinutes,
+                    pauseCooldownMinutes = latestSettings.pauseCooldownMinutes,
+                    lastMotionAt = lastMotionAt,
+                    lastPauseAt = lastPauseAt,
+                    now = pauseAttemptAt,
+                )
+                val result = if (latestEligibility.allowed) container.tvClient.sendPause() else null
+                if (result is TvResult.Success) lastPauseAt = pauseAttemptAt
+                Triple(latestSettings, latestEligibility, result)
+            }
+            val paused = tvResult is TvResult.Success
+            if (paused && persistedEvent != null) {
+                runCatching { container.database.sleepDao().updateSleepEvent(persistedEvent.copy(tvPaused = true)) }
+            }
             MonitorBus.update {
                 it.copy(
-                    snoreCount = newSnoreCount,
                     pauseCount = it.pauseCount + if (paused) 1 else 0,
-                    lastMessage = when (tvResult) {
-                        is TvResult.Error -> "Snore confirmed; TV: ${tvResult.message}"
-                        is TvResult.Success -> "Snore confirmed; ${tvResult.message}"
-                        null -> "Snore confirmed"
-                    },
+                    lastMessage = eventMessage(
+                        evidence = decision.evidence.displayName,
+                        settings = settings,
+                        eligibility = eligibility,
+                        tvResult = tvResult,
+                    ),
                 )
             }
-            updateNotification("Snores: $newSnoreCount • Pauses: ${MonitorBus.state.value.pauseCount}")
+            updateNotification(
+                "Sleep events: ${MonitorBus.state.value.sleepEventCount} • Pauses: ${MonitorBus.state.value.pauseCount}",
+            )
         }
+    }
+
+    private fun eventMessage(
+        evidence: String,
+        settings: AppSettings,
+        eligibility: PauseEligibility,
+        tvResult: TvResult?,
+    ): String = when {
+        tvResult is TvResult.Error -> "Sleep detected by $evidence; TV: ${tvResult.message}"
+        tvResult is TvResult.Success -> "Sleep detected by $evidence; ${tvResult.message}"
+        eligibility.blockReason == PauseBlockReason.AUTOMATIC_PAUSE_DISABLED ->
+            "Sleep detected by $evidence; automatic pause is disabled"
+        eligibility.blockReason == PauseBlockReason.RECENT_MOVEMENT ->
+            "Sleep detected by $evidence; waiting for ${settings.noMovementMinutes} min without movement"
+        eligibility.blockReason == PauseBlockReason.COOLDOWN_ACTIVE ->
+            "Sleep detected by $evidence; pause cooldown is active"
+        else -> "Sleep detected by $evidence"
     }
 
     private fun stopMonitoring() {
@@ -174,8 +256,8 @@ class SleepMonitorService : Service(), SensorEventListener {
                 container.database.sleepDao().updateSession(
                     original.copy(
                         endedAt = System.currentTimeMillis(),
-                        snoreCount = snapshot.snoreCount,
-                        snoreDurationMs = snoreDuration,
+                        sleepEventCount = snapshot.sleepEventCount,
+                        sleepEventDurationMs = sleepEventDuration,
                         movementCount = snapshot.movementCount,
                         averageNoiseDb = if (frameCount > 0) (noiseSum / frameCount).toFloat() else -90f,
                         maxNoiseDb = maxNoiseDb,
@@ -191,18 +273,34 @@ class SleepMonitorService : Service(), SensorEventListener {
         }
     }
 
-    private fun startMotionTracking() {
-        if (!currentSettings.monitorMovement) return
-        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
-            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+    private fun updateMotionTracking(enabled: Boolean) {
+        Handler(Looper.getMainLooper()).post {
+            if (!enabled) {
+                sensorManager?.unregisterListener(this)
+                sensorManager = null
+                return@post
+            }
+            if (sensorManager != null) return@post
+            lastMotionAt = System.currentTimeMillis()
+            sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+            sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensor ->
+                sensorManager?.registerListener(
+                    this,
+                    sensor,
+                    SensorManager.SENSOR_DELAY_NORMAL,
+                    Handler(Looper.getMainLooper()),
+                )
+            }
         }
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        val magnitude = sqrt(event.values.fold(0.0) { sum, value -> sum + value.toDouble() * value.toDouble() }).toFloat()
+        if (!currentSettings.monitorMovement) return
+        val magnitude = sqrt(event.values.fold(0.0) { sum, value ->
+            sum + value.toDouble() * value.toDouble()
+        }).toFloat()
         val now = System.currentTimeMillis()
-        if (abs(magnitude - SensorManager.GRAVITY_EARTH) > 1.7f && now - lastMotionAt > 5_000) {
+        if (abs(magnitude - SensorManager.GRAVITY_EARTH) > 1.7f && now - lastMotionAt > 5_000L) {
             lastMotionAt = now
             MonitorBus.update { it.copy(movementCount = it.movementCount + 1) }
         }
@@ -211,8 +309,8 @@ class SleepMonitorService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private fun acquireWakeLock() {
-        val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SleepPauseTV::Monitor").apply {
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SleepPauseTV::Monitor").apply {
             acquire(10 * 60 * 60 * 1000L)
         }
     }
@@ -233,11 +331,15 @@ class SleepMonitorService : Service(), SensorEventListener {
 
     private fun notification(text: String): Notification {
         val openIntent = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stopIntent = PendingIntent.getService(
-            this, 1, Intent(this, SleepMonitorService::class.java).setAction(ACTION_STOP),
+            this,
+            1,
+            Intent(this, SleepMonitorService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)

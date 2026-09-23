@@ -11,6 +11,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+internal object HomeAssistantProtocol {
+    fun authorizationHeader(token: String): String = "Bearer ${token.trim()}"
+}
+
 class HomeAssistantTvClient(private val settings: SettingsStore) : TvController {
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).build()
 
@@ -44,7 +48,7 @@ class HomeAssistantTvClient(private val settings: SettingsStore) : TvController 
 
     private fun request(config: AppSettings, url: String, body: String?, success: String): TvResult = runCatching {
         val builder = Request.Builder().url(url)
-            .header("Authorization", "Bearer ${config.homeAssistantToken.trim()}")
+            .header("Authorization", HomeAssistantProtocol.authorizationHeader(config.homeAssistantToken))
             .header("Content-Type", "application/json")
         if (body != null) builder.post(body.toRequestBody("application/json".toMediaType()))
         client.newCall(builder.build()).execute().use { response ->

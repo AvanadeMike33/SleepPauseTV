@@ -1,5 +1,6 @@
 package it.michelegiammarini.sleeppausetv.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -10,12 +11,12 @@ data class SleepSessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val startedAt: Long,
     val endedAt: Long? = null,
-    val snoreCount: Int = 0,
-    val snoreDurationMs: Long = 0,
+    @ColumnInfo(name = "snoreCount") val sleepEventCount: Int = 0,
+    @ColumnInfo(name = "snoreDurationMs") val sleepEventDurationMs: Long = 0,
     val movementCount: Int = 0,
     val averageNoiseDb: Float = -90f,
     val maxNoiseDb: Float = -90f,
-    val automaticPauses: Int = 0
+    val automaticPauses: Int = 0,
 )
 
 @Entity(
@@ -24,16 +25,16 @@ data class SleepSessionEntity(
         entity = SleepSessionEntity::class,
         parentColumns = ["id"],
         childColumns = ["sessionId"],
-        onDelete = ForeignKey.CASCADE
+        onDelete = ForeignKey.CASCADE,
     )],
-    indices = [Index("sessionId")]
+    indices = [Index("sessionId")],
 )
-data class SnoreEventEntity(
+data class SleepEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val sessionId: Long,
     val occurredAt: Long,
     val durationMs: Long,
     val peakDb: Float,
     val confidence: Float,
-    val tvPaused: Boolean
+    val tvPaused: Boolean,
 )

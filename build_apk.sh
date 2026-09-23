@@ -11,5 +11,5 @@ else
 fi
 
 python3 scripts/download_yamnet.py
-$GRADLE test assembleDebug
+$GRADLE testDebugUnitTest assembleDebug
 printf '\nAPK: app/build/outputs/apk/debug/app-debug.apk\n'
